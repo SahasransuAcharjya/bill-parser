@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BillBot - Invoice Results</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    :root {
+      --bg-color: #f4f6f8;
+      --text-color: #333;
+      --card-color: #fff;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1e1e2f;
+      --text-color: #f0f0f0;
+      --card-color: #2b2b3c;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      padding: 40px;
+      color: var(--text-color);
+    }
+
+    #particles-js {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      top: 0;
+      left: 0;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background-color: var(--card-color);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #4a6bdf;
+      margin-bottom: 25px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .field strong {
+      color: #34495e;
+    }
+
+    .buttons {
+      text-align: center;
+      margin-top: 30px;
+    }
+
+    .btn {
+      background-color: #4a6bdf;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      font-size: 15px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+      margin: 0 8px;
+    }
+
+    .btn:hover {
+      background-color: #3a58c4;
+    }
+
+    .toggle-theme {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: var(--text-color);
+    }
+  </style>
+</head>
+<body data-theme="light">
+  <div id="particles-js"></div>
+  <div class="toggle-theme" onclick="toggleTheme()">
+    <i class="fas fa-moon"></i>
+  </div>
+  <div class="container" id="resultContainer">
+    <h1>BillBot Invoice Results</h1>
+    {% for key, value in result.items() %}
+      <div class="field"><strong>{{ key.replace('_', ' ').title() }}:</strong> {{ value }}</div>
+    {% endfor %}
+
+    <div class="buttons">
+      <button class="btn" onclick="window.history.back()">Upload Another</button>
+      <button class="btn" onclick="downloadPDF()">Download PDF</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script>
+    particlesJS.load('particles-js', '/static/particles-config.json');
+  </script>
+
+  <script>
+    function toggleTheme() {
+      const html = document.querySelector('body');
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    }
+
+    window.onload = () => {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.body.setAttribute('data-theme', savedTheme);
+    };
+
+    function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const content = document.querySelectorAll('.field');
+
+      let margin = 20;
+      let lineHeight = 10;
+      let y = margin;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("BillBot - Invoice Summary", margin, y);
+      doc.line(margin, y + 2, 190, y + 2);
+      y += 12;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+
+      content.forEach(field => {
+        const key = field.querySelector('strong')?.innerText?.trim() || "";
+        const value = field.innerText.replace(key, '').trim() || "N/A";
+        const text = `${key}: ${value}`;
+        const splitText = doc.splitTextToSize(text, 170);
+
+        if (y + splitText.length * lineHeight > 280) {
+          doc.addPage();
+          y = margin;
+        }
+
+        doc.text(splitText, margin, y);
+        y += splitText.length * lineHeight + 2;
+      });
+
+      doc.save("billbot_invoice_summary.pdf");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BillBot - Invoice Uploader</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    :root {
+      --bg-color: #f4f6f8;
+      --text-color: #333;
+      --card-color: #ffffff;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1e1e2f;
+      --text-color: #f0f0f0;
+      --card-color: #2b2b3c;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      overflow: hidden;
+    }
+
+    #particles-js {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      top: 0;
+      left: 0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      background: linear-gradient(to right, #4a6bdf, #00c6ff);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .upload-box {
+      background: var(--card-color);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .drop-zone {
+      border: 2px dashed #4a6bdf;
+      border-radius: 8px;
+      padding: 30px 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      background-color: var(--card-color);
+    }
+
+    .drop-zone:hover {
+      background-color: rgba(74, 107, 223, 0.05);
+    }
+
+    .drop-zone.dragover {
+      background-color: rgba(74, 107, 223, 0.1);
+    }
+
+    .drop-zone p {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--text-color);
+    }
+
+    button {
+      background-color: #4a6bdf;
+      border: none;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+    button:hover {
+      background-color: #3a58c4;
+    }
+
+    .toggle-theme {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: var(--text-color);
+    }
+
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #ccc;
+      border-top-color: #4a6bdf;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+<body data-theme="light">
+  <!-- Geometric Background -->
+  <div id="particles-js"></div>
+
+  <!-- Dark Mode Toggle -->
+  <div class="toggle-theme" onclick="toggleTheme()">
+    <i class="fas fa-moon"></i>
+  </div>
+
+  <!-- Upload Container -->
+  <div class="container">
+    <h1>Welcome to BillBot</h1>
+    <div class="upload-box">
+      <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+        <div class="drop-zone" id="dropZone">
+          <p id="dropText">Click or Drag & Drop your invoice here</p>
+          <input type="file" name="invoice" id="invoice" required hidden />
+        </div>
+        <button type="submit">Upload</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Loading Spinner -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- particles.js config -->
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script>
+    particlesJS('particles-js', {
+      particles: {
+        number: { value: 60 },
+        color: { value: "#4a6bdf" },
+        shape: { type: "polygon", polygon: { nb_sides: 6 }},
+        opacity: { value: 0.4 },
+        size: { value: 6 },
+        line_linked: {
+          enable: true,
+          distance: 120,
+          color: "#4a6bdf",
+          opacity: 0.3,
+          width: 1
+        },
+        move: {
+          enable: true,
+          speed: 2,
+          direction: "none",
+          out_mode: "out"
+        }
+      },
+      interactivity: {
+        events: {
+          onhover: { enable: true, mode: "repulse" },
+          onclick: { enable: true, mode: "push" }
+        },
+        modes: {
+          repulse: { distance: 100 },
+          push: { particles_nb: 4 }
+        }
+      },
+      retina_detect: true
+    });
+  </script>
+
+  <!-- Theme + Loading -->
+  <script>
+    function toggleTheme() {
+      const html = document.querySelector('body');
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    }
+
+    window.onload = () => {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.body.setAttribute('data-theme', savedTheme);
+      const overlay = document.getElementById("loadingOverlay");
+      overlay.style.opacity = "0";
+      setTimeout(() => overlay.style.display = "none", 300);
+    };
+  </script>
+
+  <!-- Drag & Drop Logic -->
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('invoice');
+    const dropText = document.getElementById('dropText');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        dropText.textContent = fileInput.files[0].name;
+      }
+    });
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      });
+    });
+
+    dropZone.addEventListener('drop', e => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        fileInput.files = files;
+        dropText.textContent = files[0].name;
+      }
+    });
+  </script>
+</body>
+</html>

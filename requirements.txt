@@ -1,0 +1,6 @@
+Flask==2.3.2
+pytesseract==0.3.10
+opencv-python-headless==4.8.0.74
+Werkzeug==2.3.7
+Jinja2==3.1.2
+MarkupSafe==2.1.3
