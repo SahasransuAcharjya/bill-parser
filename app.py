@@ -10,46 +10,123 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-def parse_invoice_details(text):
-    def find(pattern, text, group=1, default=""):
-        match = re.search(pattern, text, re.IGNORECASE)
-        return match.group(group).strip() if match else default
+def multi_find(patterns, text, group=1, default=""):
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match and match.group(group) is not None:
+            return match.group(group).strip()
+    return default
 
-    invoice_data = {
-        "Invoice Number": find(r"Invoice\s*(Number|No\.|ID|Details)[^\w\d]*([\w\d\-\/]+)", text, 2),
-        "Order Number": find(r"Order\s*(Number|No\.|ID)[^\w\d]*([\w\d\-\/]+)", text, 2),
-        "Invoice Date": find(r"Invoice\s*Date[^\d]*(\d{2}[\-\.]\d{2}[\-\.]\d{4}|\d{2}\/\d{2}\/\d{4})", text),
-        "Order Date": find(r"Order\s*Date[^\d]*(\d{2}[\-\.]\d{2}[\-\.]\d{4}|\d{2}\/\d{2}\/\d{4})", text),
-        "Seller Name": find(r"(Sold By|Seller)[^\n:]*:\s*([\w\s,&\-\.]+)", text, 2),
-        "GSTIN": find(r"GST(IN|IN No\.| Registration No)[^\w]*([\w\d]+)", text, 2),
-        "PAN": find(r"PAN\s*(No\.|Number)?[^\w]*([\w\d]+)", text, 2),
-        "Seller Address": find(r"Seller (Registered Address|Address)[^\n]*:\s*([^\n]+)", text, 2),
-        "Seller Phone": find(r"(Telephone|Phone)[^\d]*(\+?\d{8,})", text, 2),
-        "Seller Email": find(r"(Email|E-mail)[^\w]*([\w\d.\-]+@[\w\d.\-]+)", text, 2),
-        "Buyer Name": find(r"Billing Address[^\n:]*[:]*\s*([\w\s,&\-\.]+)", text, 1),
-        "Billing Address": find(r"Billing Address[^\n:]*:\s*([^\n]+)", text, 1),
-        "Buyer Phone": find(r"Phone[^\d]*(\+?\d{8,})", text),
-        "Shipping Address": find(r"Shipping Address[^\n:]*:\s*([^\n]+)", text, 1),
-        "Place of Supply": find(r"Place of supply[^\n:]*:\s*([^\n]+)", text, 1),
-        "Place of Delivery": find(r"Place of delivery[^\n:]*:\s*([^\n]+)", text, 1),
-        "Product Description": find(r"\d+\s+([^\n]+)\s+\d+\s+[^\n]+", text, 1),
-        "Quantity": find(r"Qty\s*[:\-]?\s*(\d+)", text),
-        "Unit Price": find(r"(Unit Price|Gross Amount)\s*[:\-]?\s*(₹?\d+\.?\d*)", text, 2),
-        "Discount": find(r"Discount\s*[:\-]?\s*(₹?\d+\.?\d*)", text),
-        "Taxable Value": find(r"Taxable Value\s*[:\-]?\s*(₹?\d+\.?\d*)", text),
-        "Tax Rate": find(r"Tax Rate\s*[:\-]?\s*([\d\.]+%?)", text),
-        "Tax Type": find(r"Tax Type\s*[:\-]?\s*(\w+)", text),
-        "Tax Amount": find(r"Tax Amount\s*[:\-]?\s*(₹?\d+\.?\d*)", text),
-        "Total Item Amount": find(r"Total Amount\s*[:\-]?\s*(₹?\d+\.?\d*)", text),
-        "Total Quantity": find(r"TOTAL QTY\s*[:\-]?\s*(\d+)", text),
-        "Total Amount": find(r"TOTAL PRICE\s*[:\-]?\s*(₹?\d+\.?\d*)", text),
-        "Grand Total": find(r"(Grand Total|TOTAL)\s*[:\-₹]?\s*(₹?\d+\.?\d*)", text, 2),
-        "Amount in Words": find(r"Amount in Words[^\n:]*:\s*([^\n]+)", text),
-        "Mode of Payment": find(r"Mode of Payment[^\n:]*:\s*([^\n]+)", text),
-        "Payment Transaction ID": find(r"Payment Transaction ID[^\n]*:\s*([^\n]+)", text, 1),
-        "Invoice Value": find(r"Invoice Value[^\n:]*[:\-]?\s*(₹?\d+\.?\d*)", text)
+def capture_after(label, text, max_lines=3):
+    lines = text.splitlines()
+    idx = [i for i, l in enumerate(lines) if label.lower() in l.lower()]
+    if idx:
+        result = []
+        for offset in range(1, max_lines+1):
+            if idx[0]+offset < len(lines):
+                line = lines[idx[0]+offset].strip()
+                if line:
+                    result.append(line)
+        return " ".join(result)
+    return ""
+
+def extract_fields(text):
+    invoice_patterns = [
+        r"Invoice\s*(Number|No\.|ID|Details)[^\w\d]*([\w\d\-\/]+)",
+        r"Invoice No[_:]?[\s]*([\w\d\-\/]+)"
+    ]
+    order_patterns = [
+        r"Order\s*(Number|No\.|ID)[^\w\d]*([\w\d\-\/]+)",
+        r"Order ID[_:]?[\s]*([\w\d\-\/]+)"
+    ]
+    invoice_date_patterns = [
+        r"Invoice\s*Date[_:]?[^\d]*(\d{2}[\-\.]\d{2}[\-\.]\d{4})",
+        r"Invoice Date[_:]?\s*(\d{2}\/\d{2}\/\d{4})"
+    ]
+    order_date_patterns = [
+        r"Order\s*Date[_:]?[^\d]*(\d{2}[\-\.]\d{2}[\-\.]\d{4})",
+        r"Order Date[_:]?\s*(\d{2}\/\d{2}\/\d{4})"
+    ]
+    seller_patterns = [
+        r"Sold By\s*[:\-]?\s*([^\n,]+)",
+        r"Seller Registered Address[:\-]?\s*([^\n,]+)"
+    ]
+    gstin_patterns = [
+        r"GST(IN|IN No\.| Registration No)[^\w]*([A-Z0-9]+)",
+        r"GSTIN[:\-]?\s*([A-Z0-9]+)"
+    ]
+    pan_patterns = [
+        r"PAN\s*(No\.|Number)?[^\w]*([A-Z0-9]+)"
+    ]
+    seller_addr_patterns = [
+        r"Sold By\s*[:\-]?\s*(.+?)(?=GSTIN|PAN|$)",
+        r"Seller Registered Address\s*[:\-]?\s*(.+?)(?=GSTIN|PAN|$)"
+    ]
+    buyer_name = multi_find([r"Billing Address\s*[:\-]?\s*([\w \-,\.]+)"], text) or capture_after("Billing Address", text, max_lines=1)
+    billing_addr = capture_after("Billing Address", text, max_lines=2)
+    shipping_addr = multi_find([r"Shipping Address\s*[:\-]?\s*([\w \-,\.]+)"], text) or capture_after("Shipping Address", text, max_lines=2)
+    place_supply = multi_find([r"Place of supply\s*[:\-]?\s*([\w \-,\.]+)"], text)
+    place_delivery = multi_find([r"Place of delivery\s*[:\-]?\s*([\w \-,\.]+)"], text)
+
+    product_pattern = r"\n([\w ,\-()\[\]/]+)\s+HSN:.*IGST:.*?\s+(\d+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)"
+    m_prod = re.search(product_pattern, text)
+    if m_prod:
+        desc = m_prod.group(1)
+        qty = m_prod.group(2)
+        gross_price = m_prod.group(3)
+        discount = m_prod.group(4)
+        taxable_val = m_prod.group(5)
+        igst = m_prod.group(6)
+        total = m_prod.group(7)
+    else:
+        desc = multi_find([r"Description\s*\n([^\n]+)"], text)
+        qty = multi_find([r"\bQty[\s:]*([0-9]+)"], text)
+        gross_price = multi_find([r"Gross\s*Amount[\s:]*([\d.\-]+)"], text)
+        discount = multi_find([r"Discount[\s:]*([\d.\-]+)"], text)
+        taxable_val = multi_find([r"Taxable Value[\s:]*([\d.\-]+)"], text)
+        igst = multi_find([r"IGST[\s:]*([\d.\-]+)"], text)
+        total = multi_find([r"TOTAL PRICE[\s:]*([\d.\-]+)"], text)
+    
+    total_qty = multi_find([r"TOTAL QTY[\s:]*([0-9]+)"], text)
+    total_amount = multi_find([r"TOTAL PRICE[\s:]*([\d.\-]+)"], text)
+    grand_total = multi_find([r"Grand Total[\s:₹]*([\d.\-]+)"], text)
+    amount_words = multi_find([r"Amount in Words[\s:]*([^\n]+)"], text)
+    mode_payment = multi_find([r"Mode of Payment[\s:]*([^\n]+)"], text)
+    payment_tx_id = multi_find([r"Payment Transaction ID[\s:]*([^\n]+)"], text)
+    invoice_value = multi_find([r"Invoice Value[\s:]*([\d.\-]+)"], text)
+
+    extracted = {
+        "Invoice Number": multi_find(invoice_patterns, text),
+        "Order Number": multi_find(order_patterns, text),
+        "Invoice Date": multi_find(invoice_date_patterns, text),
+        "Order Date": multi_find(order_date_patterns, text),
+        "Seller Name": multi_find(seller_patterns, text),
+        "GSTIN": multi_find(gstin_patterns, text),
+        "PAN": multi_find(pan_patterns, text),
+        "Seller Address": multi_find(seller_addr_patterns, text),
+        "Buyer Name": buyer_name,
+        "Billing Address": billing_addr,
+        "Shipping Address": shipping_addr,
+        "Place Of Supply": place_supply,
+        "Place Of Delivery": place_delivery,
+        "Product Description": desc,
+        "Quantity": qty,
+        "Unit Price": gross_price,
+        "Discount": discount,
+        "Taxable Value": taxable_val,
+        "Tax Rate": "12%",   # Set from context or table if needed
+        "Tax Type": "IGST",  # Set from context or table if needed
+        "Tax Amount": igst,
+        "Total Item Amount": total,
+        "Total Quantity": total_qty,
+        "Total Amount": total_amount,
+        "Grand Total": grand_total,
+        "Amount In Words": amount_words,
+        "Mode Of Payment": mode_payment,
+        "Payment Transaction Id": payment_tx_id,
+        "Invoice Value": invoice_value,
     }
-    return invoice_data
+    return extracted
 
 @app.route('/')
 def index():
@@ -65,14 +142,10 @@ def upload_invoice():
     filename = secure_filename(file.filename)
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
-
-    # Read image and perform OCR
     image = cv2.imread(file_path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     text = pytesseract.image_to_string(gray)
-
-    # Parse extracted fields
-    parsed_data = parse_invoice_details(text)
+    parsed_data = extract_fields(text)
     return render_template('results.html', result=parsed_data)
 
 if __name__ == '__main__':
