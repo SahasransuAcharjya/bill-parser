@@ -1,6 +1,6 @@
 Flask==2.3.3
-pytesseract==0.3.13
+pytesseract==0.3.1
 opencv-python==4.8.0.74
-Werkzeug==2.3.4
+Werkzeug==2.3.7
 Jinja2==3.1.2
 numpy==1.26.4
